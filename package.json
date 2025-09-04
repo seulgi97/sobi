@@ -1,0 +1,31 @@
+{
+  "name": "sobi-payment-platform",
+  "version": "1.0.0",
+  "description": "스마트 결제 비교 플랫폼 - 최저가 결제수단 비교 서비스",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["payment", "comparison", "sobi", "fintech"],
+  "author": "SOBI Team",
+  "license": "MIT",
+  "dependencies": {
+    "next": "14.2.0",
+    "react": "18.3.0",
+    "react-dom": "18.3.0",
+    "typescript": "^5.3.0",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "tailwindcss": "^3.4.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "openai": "^4.20.0",
+    "zustand": "^4.4.0",
+    "axios": "^1.6.0",
+    "lucide-react": "^0.300.0"
+  }
+}

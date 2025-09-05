@@ -6,17 +6,29 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || '',
 })
 
+interface PaymentMethod {
+  id: string
+  name: string
+  type: 'card' | 'pay' | 'bank'
+  discountRate: number
+  cashback: number
+  monthlyLimit: number
+  specialCategories: string[]
+  isActive: boolean
+}
+
 interface PriceSearchRequest {
   productName: string
   category: string
   targetPrice?: number
   location?: string
+  userPaymentMethods?: PaymentMethod[]
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: PriceSearchRequest = await request.json()
-    const { productName, category, targetPrice, location } = body
+    const { productName, category, targetPrice, location, userPaymentMethods } = body
 
     // 기본 검증
     if (!productName || !category) {
@@ -172,6 +184,11 @@ JSON 형태 (이 형태를 정확히 따라주세요):
       console.error('Original response:', responseText)
       // JSON 파싱 또는 검증 실패 시 목업 데이터 반환
       priceData = generateMockPriceData(productName, category, targetPrice)
+    }
+
+    // 사용자 결제수단을 고려한 실제 최저가 계산
+    if (userPaymentMethods && userPaymentMethods.length > 0) {
+      priceData = calculateActualBestPrices(priceData, userPaymentMethods, category)
     }
 
     return NextResponse.json({
@@ -352,4 +369,94 @@ function getDefaultUrl(platform: string, productName: string): string {
   }
   
   return urlMap[platform] || `https://search.shopping.naver.com/search/all?query=${encodedProduct}`
+}
+
+// 사용자 결제수단을 고려한 실제 최저가 계산
+function calculateActualBestPrices(data: any, userPaymentMethods: PaymentMethod[], category: string) {
+  if (!data.sources || !Array.isArray(data.sources)) {
+    return data
+  }
+
+  // 활성화된 결제수단만 필터링
+  const activePaymentMethods = userPaymentMethods.filter(pm => pm.isActive)
+  
+  if (activePaymentMethods.length === 0) {
+    return data
+  }
+
+  // 각 매장별로 최적의 결제수단과 실제 가격 계산
+  data.sources = data.sources.map((source: any) => {
+    const bestPaymentOption = findBestPaymentMethod(source, activePaymentMethods, category)
+    
+    if (bestPaymentOption) {
+      return {
+        ...source,
+        originalPrice: source.price,
+        actualPrice: bestPaymentOption.finalPrice,
+        bestPaymentMethod: bestPaymentOption.paymentMethod,
+        discount: bestPaymentOption.discount,
+        paymentBenefits: [{
+          method: bestPaymentOption.paymentMethod.name,
+          discount: bestPaymentOption.discount,
+          description: `${bestPaymentOption.paymentMethod.name}로 결제시 ${bestPaymentOption.discount}원 할인`
+        }]
+      }
+    }
+    
+    return source
+  })
+
+  // actualPrice 기준으로 정렬
+  data.sources.sort((a: any, b: any) => {
+    const priceA = a.actualPrice || a.price
+    const priceB = b.actualPrice || b.price
+    return priceA - priceB
+  })
+
+  // 최저가와 추천 플랫폼 업데이트
+  const lowestPriceSource = data.sources[0]
+  data.lowestPrice = lowestPriceSource.actualPrice || lowestPriceSource.price
+  data.recommendedPlatform = lowestPriceSource.platform
+
+  // 평균가격도 actualPrice 기준으로 재계산
+  const actualPrices = data.sources.map((s: any) => s.actualPrice || s.price)
+  data.averagePrice = Math.round(actualPrices.reduce((sum: number, price: number) => sum + price, 0) / actualPrices.length)
+
+  return data
+}
+
+// 특정 매장에서 최적의 결제수단 찾기
+function findBestPaymentMethod(source: any, paymentMethods: PaymentMethod[], category: string) {
+  let bestOption = null
+  let maxDiscount = 0
+
+  for (const pm of paymentMethods) {
+    const discount = calculateDiscount(source.price, pm, category)
+    
+    if (discount > maxDiscount) {
+      maxDiscount = discount
+      bestOption = {
+        paymentMethod: pm,
+        discount: discount,
+        finalPrice: source.price - discount
+      }
+    }
+  }
+
+  return bestOption
+}
+
+// 할인 금액 계산
+function calculateDiscount(originalPrice: number, paymentMethod: PaymentMethod, category: string): number {
+  let discount = 0
+
+  // 기본 할인율 적용
+  discount += originalPrice * paymentMethod.discountRate
+
+  // 특별 카테고리 추가 할인 (cashback을 할인으로 계산)
+  if (paymentMethod.specialCategories.includes(category)) {
+    discount += originalPrice * paymentMethod.cashback
+  }
+
+  return Math.round(discount)
 }

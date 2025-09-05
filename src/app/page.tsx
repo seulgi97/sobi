@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePaymentMethods } from '@/hooks/usePaymentMethods'
 
 interface PriceSource {
   platform: string
@@ -20,6 +21,9 @@ interface PaymentBenefit {
 interface PriceSource {
   platform: string
   price: number
+  originalPrice?: number
+  actualPrice?: number
+  discount?: number
   url: string
   availability: boolean
   shipping: number
@@ -54,6 +58,7 @@ export default function HomePage() {
   const [showResults, setShowResults] = useState(false)
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null)
   const [currentCardIndex, setCurrentCardIndex] = useState(0)
+  const { getActivePaymentMethods } = usePaymentMethods()
 
   // 10초마다 카드 자동 변경 (2개씩)
   useEffect(() => {
@@ -72,6 +77,9 @@ export default function HomePage() {
     setIsSearching(true)
     
     try {
+      // 사용자의 활성 결제수단 정보 가져오기
+      const activePaymentMethods = getActivePaymentMethods()
+      
       const response = await fetch('/api/price-search', {
         method: 'POST',
         headers: {
@@ -80,7 +88,8 @@ export default function HomePage() {
         body: JSON.stringify({
           productName: searchText,
           category: searchCategory,
-          location: '서울' // 추후 사용자 위치로 변경 가능
+          location: '서울', // 추후 사용자 위치로 변경 가능
+          userPaymentMethods: activePaymentMethods
         }),
       })
       
@@ -170,7 +179,18 @@ export default function HomePage() {
                       {source.platform}
                     </div>
                     <div className="text-lg font-bold text-gray-900">
-                      {source.price.toLocaleString()}원
+                      {source.actualPrice ? (
+                        <div>
+                          <div className="text-green-600">{source.actualPrice.toLocaleString()}원</div>
+                          {source.originalPrice && source.originalPrice !== source.actualPrice && (
+                            <div className="text-sm text-gray-400 line-through">
+                              {source.originalPrice.toLocaleString()}원
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div>{source.price.toLocaleString()}원</div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       {source.shipping > 0 && <span>배송비: {source.shipping.toLocaleString()}원</span>}

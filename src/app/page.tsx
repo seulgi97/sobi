@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface PriceSource {
   platform: string
@@ -9,6 +9,22 @@ interface PriceSource {
   availability: boolean
   shipping: number
   rating?: number
+}
+
+interface PaymentBenefit {
+  method: string
+  discount: number
+  description: string
+}
+
+interface PriceSource {
+  platform: string
+  price: number
+  url: string
+  availability: boolean
+  shipping: number
+  rating?: number
+  paymentBenefits?: PaymentBenefit[]
 }
 
 interface SearchResult {
@@ -20,14 +36,37 @@ interface SearchResult {
   recommendedPlatform: string
 }
 
+
+const SUGGESTION_CARDS = [
+  { text: "아이폰 15", category: "온라인쇼핑", icon: "📱", description: "온라인 최저가" },
+  { text: "아메리카노", category: "카페", icon: "☕", description: "카페별 가격비교" },
+  { text: "삼각김밥", category: "편의점", icon: "🍙", description: "편의점 가격비교" },
+  { text: "주유", category: "주유소", icon: "⛽", description: "주유소별 가격" },
+  { text: "감기약", category: "약국", icon: "💊", description: "약국별 가격" },
+  { text: "런닝화", category: "온라인쇼핑", icon: "👟", description: "온라인 최저가" },
+  { text: "샐러드", category: "마트", icon: "🥗", description: "마트별 가격" },
+  { text: "헬스 이용권", category: "헬스장", icon: "🏋️", description: "헬스장별 가격" },
+]
+
 export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearching, setIsSearching] = useState(false)
   const [showResults, setShowResults] = useState(false)
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null)
+  const [currentCardIndex, setCurrentCardIndex] = useState(0)
 
-  const handleSearch = async (query?: string) => {
+  // 10초마다 카드 자동 변경 (2개씩)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentCardIndex((prev) => (prev + 2) % SUGGESTION_CARDS.length)
+    }, 10000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  const handleSearch = async (query?: string, category?: string) => {
     const searchText = query || searchQuery
+    const searchCategory = category || '온라인쇼핑'
     if (!searchText.trim()) return
     
     setIsSearching(true)
@@ -40,7 +79,8 @@ export default function HomePage() {
         },
         body: JSON.stringify({
           productName: searchText,
-          category: '온라인쇼핑'
+          category: searchCategory,
+          location: '서울' // 추후 사용자 위치로 변경 가능
         }),
       })
       
@@ -57,10 +97,6 @@ export default function HomePage() {
     }
   }
 
-  const handleCardClick = (searchText: string) => {
-    setSearchQuery(searchText)
-    handleSearch(searchText)
-  }
 
   const handlePaymentMethodRegistration = () => {
     // 결제수단 등록 페이지로 이동
@@ -73,7 +109,7 @@ export default function HomePage() {
 
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-        <div className="w-full max-w-sm mx-auto bg-white min-h-screen md:min-h-0 md:rounded-3xl md:shadow-2xl md:max-h-[800px] overflow-y-auto">
+        <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto bg-white min-h-screen md:min-h-0 md:rounded-3xl md:shadow-2xl md:max-h-[900px] lg:max-h-[1000px] overflow-y-auto">
           {/* 헤더 */}
           <div className="flex items-center justify-between p-4 border-b bg-white">
             <button 
@@ -126,9 +162,9 @@ export default function HomePage() {
           <div className="px-4 space-y-3 mb-6">
             <div className="text-lg font-bold text-gray-900 mb-3">다른 쇼핑몰 가격</div>
             
-            {searchResult.sources.slice(0, 5).map((source, index) => (
+            {searchResult.sources.slice(0, 5).map((source) => (
               <div key={source.platform} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-3">
                   <div className="flex-1">
                     <div className="font-medium text-gray-900 mb-1">
                       {source.platform}
@@ -137,7 +173,7 @@ export default function HomePage() {
                       {source.price.toLocaleString()}원
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <span>배송비: {source.shipping === 0 ? '무료' : `${source.shipping.toLocaleString()}원`}</span>
+                      {source.shipping > 0 && <span>배송비: {source.shipping.toLocaleString()}원</span>}
                       {source.rating && (
                         <span>⭐ {source.rating}</span>
                       )}
@@ -152,9 +188,26 @@ export default function HomePage() {
                     rel="noopener noreferrer"
                     className="bg-gray-800 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-700 transition-colors"
                   >
-                    구매
+                    {searchResult.category === '온라인쇼핑' ? '구매' : '방문'}
                   </a>
                 </div>
+                
+                {/* 결제수단 혜택 표시 (오프라인 매장용) */}
+                {source.paymentBenefits && source.paymentBenefits.length > 0 && (
+                  <div className="border-t pt-3 mt-3">
+                    <div className="text-sm font-medium text-gray-800 mb-2">💳 결제수단 혜택</div>
+                    <div className="space-y-1">
+                      {source.paymentBenefits.map((benefit, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">{benefit.method}</span>
+                          <span className="text-green-600 font-medium">
+                            {benefit.discount > 0 ? `-${benefit.discount.toLocaleString()}원` : benefit.description}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -188,7 +241,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm mx-auto bg-white min-h-screen md:min-h-0 md:rounded-3xl md:shadow-2xl md:max-h-[800px] overflow-hidden">
+      <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto bg-white min-h-screen md:min-h-0 md:rounded-3xl md:shadow-2xl md:max-h-[900px] lg:max-h-[1000px] overflow-hidden">
         {/* 상태표시줄 - 모바일에서만 표시 */}
         <div className="flex justify-between items-center px-4 pt-4 pb-2 text-sm md:hidden">
           <div className="font-medium">9:41</div>
@@ -285,36 +338,61 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* 빠른 액세스 카드들 */}
-        <div className="px-4 mb-24 md:mb-6">
-          <div className="grid grid-cols-2 gap-3 md:gap-4">
+        {/* 자동 회전 추천 카드 */}
+        <div className="px-4 mb-6">
+          <div className="text-sm font-medium text-gray-600 mb-3 px-2">추천 검색</div>
+          <div className="overflow-hidden">
             <div 
-              className="bg-white border border-gray-200 rounded-2xl p-4 md:p-6 text-center shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => handleCardClick("아이폰 15")}
+              className="flex transition-transform duration-500 ease-in-out"
+              style={{ transform: `translateX(-${currentCardIndex * 50}%)` }}
             >
-              <div className="text-2xl md:text-3xl mb-2">📱</div>
-              <div className="text-sm md:text-base font-medium text-gray-900 mb-1">
-                아이폰 15
-              </div>
-              <div className="text-xs md:text-sm text-gray-600">최저가 검색</div>
+              {SUGGESTION_CARDS.map((card, index) => (
+                <div 
+                  key={index}
+                  className="w-1/2 md:w-1/3 lg:w-1/4 flex-shrink-0 px-2"
+                >
+                  <div 
+                    className="bg-white border border-gray-200 rounded-2xl p-3 md:p-4 shadow-sm hover:shadow-md transition-all cursor-pointer h-full"
+                    onClick={() => handleSearch(card.text, card.category)}
+                  >
+                    <div className="flex md:flex-col items-center md:items-start md:text-center gap-3 md:gap-2">
+                      <div className="text-2xl md:text-3xl flex-shrink-0">{card.icon}</div>
+                      <div className="flex-1 md:flex-none min-w-0">
+                        <div className="text-sm md:text-base font-medium text-gray-900 mb-1 md:mb-2">
+                          {card.text}
+                        </div>
+                        <div className="text-xs md:text-sm text-gray-600">{card.description}</div>
+                      </div>
+                      <div className="flex-shrink-0 md:hidden">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-            
-            <div 
-              className="bg-white border border-gray-200 rounded-2xl p-4 md:p-6 text-center shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => handleCardClick("나이키 에어포스")}
-            >
-              <div className="text-2xl md:text-3xl mb-2">👟</div>
-              <div className="text-sm md:text-base font-medium text-gray-900 mb-1">
-                나이키 에어포스
-              </div>
-              <div className="text-xs md:text-sm text-gray-600">최저가 검색</div>
-            </div>
+          </div>
+          
+          {/* 인디케이터 */}
+          <div className="flex justify-center mt-4 gap-1">
+            {Array.from({ length: Math.ceil(SUGGESTION_CARDS.length / 2) }).map((_, index) => (
+              <button
+                key={index}
+                onClick={() => setCurrentCardIndex(index * 2)}
+                className={`w-2 h-2 rounded-full transition-colors ${
+                  Math.floor(currentCardIndex / 2) === index ? 'bg-gray-800' : 'bg-gray-300'
+                }`}
+              />
+            ))}
           </div>
         </div>
 
         {/* 하단 검색창 */}
-        <div className="fixed bottom-4 left-4 right-4 md:relative md:bottom-0 md:left-0 md:right-0 md:p-4">
-          <div className="max-w-sm mx-auto">
+        <div className="fixed bottom-4 left-4 right-4 md:absolute md:bottom-4 md:left-4 md:right-4">
+          <div className="max-w-sm md:max-w-md lg:max-w-lg mx-auto">
+
             <div className="flex items-center bg-white rounded-full shadow-lg border border-gray-200 p-2 md:p-3">
               <input
                 placeholder="소비에게 질문해보세요!"

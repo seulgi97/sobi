@@ -10,12 +10,13 @@ interface PriceSearchRequest {
   productName: string
   category: string
   targetPrice?: number
+  location?: string
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: PriceSearchRequest = await request.json()
-    const { productName, category, targetPrice } = body
+    const { productName, category, targetPrice, location } = body
 
     // 기본 검증
     if (!productName || !category) {
@@ -38,8 +39,54 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // 개선된 ChatGPT 프롬프트 - 더 구체적이고 정확한 응답을 위해
-    const prompt = `
+    // 온라인/오프라인 구분하여 프롬프트 생성
+    const isOffline = ['편의점', '마트', '백화점', '카페', '주유소', '병원', '약국', '미용실', '헬스장'].includes(category)
+    
+    const prompt = isOffline ? `
+다음 상품/서비스에 대한 오프라인 매장 정보와 결제수단별 혜택을 정확한 JSON 형태로 제공해주세요.
+
+상품/서비스 정보:
+- 상품명: "${productName}"
+- 카테고리: "${category}"
+${location ? `- 지역: ${location}` : ''}
+${targetPrice ? `- 목표 가격: ${targetPrice.toLocaleString()}원` : ''}
+
+요구사항:
+1. 반드시 유효한 JSON 형태로만 응답하세요
+2. 가격은 반드시 숫자 타입으로 설정하세요
+3. 결제수단별 혜택을 포함하세요
+4. 실제 매장 체인명을 사용하세요
+
+JSON 형태:
+{
+  "productName": "${productName}",
+  "category": "${category}",
+  "sources": [
+    {
+      "platform": "매장명 (예: GS25, 세븐일레븐, 롯데마트, 스타벅스 등)",
+      "price": 숫자,
+      "url": "매장 홈페이지 또는 앱 링크",
+      "availability": true,
+      "shipping": 0,
+      "rating": 소수점포함숫자,
+      "paymentBenefits": [
+        {"method": "결제수단명", "discount": 할인금액, "description": "혜택설명"}
+      ]
+    }
+  ],
+  "averagePrice": 숫자,
+  "lowestPrice": 숫자,
+  "recommendedPlatform": "최저가매장명"
+}
+
+포함할 매장: ${category}에 맞는 실제 브랜드 매장들
+${category === '카페' ? `
+카페 브랜드: 스타벅스, 이디야, 메가커피, 컴포즈커피, 탐앤탐스, 할리스, 투썸플레이스, 커피빈, 엔젤리너스, 빽다방, 폴바셋, 파스쿠찌, 카페베네, 커피나무, 그라찌에, 드롭탑, 더벤티, 매머드커피, 커피에반하다, 니코스케이터
+` : ''}
+- 결제수단별 할인혜택 포함 (신용카드, 간편결제, 멤버십 등)
+- ${category} 카테고리에 적합한 합리적인 가격 범위 사용
+
+중요: JSON 형태 외에는 다른 텍스트를 포함하지 마세요.` : `
 다음 상품에 대한 온라인 쇼핑몰별 가격 정보를 정확한 JSON 형태로 제공해주세요.
 
 상품 정보:
@@ -153,7 +200,26 @@ JSON 형태 (이 형태를 정확히 따라주세요):
 // 목업 데이터 생성 함수
 function generateMockPriceData(productName: string, category: string, targetPrice?: number) {
   const basePrice = targetPrice || getBasePriceByCategory(category)
-  const platforms = ['네이버쇼핑', '쿠팡', '11번가', 'G마켓', '옥션', '인터파크', '롯데온', '위메프']
+  
+  // 카테고리별 플랫폼 설정
+  const getPlatformsByCategory = (cat: string) => {
+    switch(cat) {
+      case '카페':
+        return ['스타벅스', '메가커피', '이디야', '컴포즈커피', '탐앤탐스', '할리스', '투썸플레이스', '빽다방', '엔젤리너스', '폴바셋']
+      case '편의점':
+        return ['GS25', '세븐일레븐', 'CU', '이마트24', '미니스톱']
+      case '마트':
+        return ['이마트', '홈플러스', '롯데마트', '코스트코', '농협하나로마트']
+      case '백화점':
+        return ['롯데백화점', '신세계백화점', '현대백화점', '갤러리아']
+      case '주유소':
+        return ['SK에너지', 'GS칼텍스', 'S-Oil', '현대오일뱅크']
+      default:
+        return ['네이버쇼핑', '쿠팡', '11번가', 'G마켓', '옥션', '인터파크', '롯데온', '위메프']
+    }
+  }
+  
+  const platforms = getPlatformsByCategory(category)
   
   const sources = platforms.slice(0, 6).map((platform) => {
     const priceVariation = (Math.random() - 0.5) * 0.3 // ±15% 변동
@@ -188,13 +254,17 @@ function generateMockPriceData(productName: string, category: string, targetPric
 function getBasePriceByCategory(category: string): number {
   const categoryPrices: Record<string, number> = {
     '온라인쇼핑': 50000,
-    '편의점': 3000,
+    '편의점': 2000,
     '마트': 15000,
     '백화점': 100000,
-    '카페': 5000,
+    '카페': 4000,  // 아메리카노 기준 4000원
     '배달음식': 20000,
     '서점': 15000,
     '영화관': 12000,
+    '주유소': 1600, // 리터당 1600원
+    '병원': 30000,
+    '약국': 8000,
+    '헬스장': 80000, // 월 이용료
     '기타': 30000
   }
   

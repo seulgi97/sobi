@@ -58,7 +58,16 @@ export default function HomePage() {
   const [showResults, setShowResults] = useState(false)
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null)
   const [currentCardIndex, setCurrentCardIndex] = useState(0)
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false)
+  const [selectedSource, setSelectedSource] = useState<PriceSource | null>(null)
+  const [showCardSlider, setShowCardSlider] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const { getActivePaymentMethods } = usePaymentMethods()
+
+  // 클라이언트 사이드 마운트 체크
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // 10초마다 카드 자동 변경 (2개씩)
   useEffect(() => {
@@ -110,6 +119,32 @@ export default function HomePage() {
   const handlePaymentMethodRegistration = () => {
     // 결제수단 등록 페이지로 이동
     window.location.href = '/payment-methods'
+  }
+
+  const handlePurchaseClick = (source: PriceSource) => {
+    setSelectedSource(source)
+    setShowPurchaseModal(true)
+  }
+
+  const handlePurchaseConfirm = () => {
+    // 실제 구매 로직을 여기에 구현
+    setShowPurchaseModal(false)
+    setShowResults(false) // 메인페이지로 돌아가기
+    setShowCardSlider(true) // 카드 슬라이더 표시
+    setSelectedSource(null)
+  }
+
+  // 클라이언트 사이드에서만 렌더링
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+        <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto bg-white min-h-screen md:min-h-0 md:rounded-3xl md:shadow-2xl md:max-h-[900px] lg:max-h-[1000px] overflow-hidden">
+          <div className="flex items-center justify-center h-full min-h-[400px]">
+            <div className="animate-spin w-8 h-8 border-4 border-gray-300 border-t-gray-600 rounded-full"></div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (showResults && searchResult) {
@@ -202,14 +237,25 @@ export default function HomePage() {
                       </span>
                     </div>
                   </div>
-                  <a 
-                    href={source.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-gray-800 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-700 transition-colors"
-                  >
-                    {searchResult.category === '온라인쇼핑' ? '구매' : '방문'}
-                  </a>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => handlePurchaseClick(source)}
+                      className="bg-gray-800 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-700 transition-colors"
+                    >
+                      {searchResult.category === '온라인쇼핑' ? '구매' : '방문'}
+                    </button>
+                    {searchResult.category === '온라인쇼핑' && (
+                      <a 
+                        href={source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-blue-600 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-700 transition-colors flex items-center"
+                        title="외부 사이트로 이동"
+                      >
+                        🔗
+                      </a>
+                    )}
+                  </div>
                 </div>
                 
                 {/* 결제수단 혜택 표시 (오프라인 매장용) */}
@@ -255,6 +301,93 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+
+        {/* 구매 확인 모달 - 검색 결과 페이지용 */}
+        {showPurchaseModal && selectedSource && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4" 
+            style={{zIndex: 9999}}
+          >
+            <div 
+              className="bg-white rounded-2xl p-6 w-full max-w-sm mx-auto shadow-xl" 
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 카드 리더기 UI */}
+              <div className="flex flex-col items-center mb-6">
+                <div className="relative mb-4">
+                  {/* 카드 리더기 */}
+                  <div className="w-24 h-16 bg-gray-300 rounded-lg flex items-center justify-center relative">
+                    <div className="w-16 h-10 bg-white rounded border-2 border-gray-400 flex items-center justify-center">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    </div>
+                    {/* 카드 삽입 슬롯 */}
+                    <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-gray-600 rounded"></div>
+                  </div>
+                  {/* 카드가 삽입되는 모습 */}
+                  <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-14 h-8 bg-yellow-400 rounded-md"></div>
+                </div>
+                
+                <h3 className="text-lg font-semibold text-gray-900 mb-2 text-center">
+                  카드를 사용하시나요?
+                </h3>
+                <p className="text-sm text-gray-600 text-center mb-1">
+                  사용하신다면 버튼을 눌러주세요.
+                </p>
+                <p className="text-sm text-gray-600 text-center mb-1">
+                  쿠폰 사용으로 절약한 금액이 반영
+                </p>
+                <p className="text-sm text-gray-600 text-center">
+                  절약 캐시에 등록되어 올려갑니다.
+                </p>
+                <p className="text-xs text-gray-500 text-center mt-2">
+                  총급 체크 : ???
+                </p>
+              </div>
+
+              {/* 구매 정보 */}
+              <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                <div className="flex justify-between items-start mb-2">
+                  <span className="font-medium text-gray-900">{selectedSource.platform}</span>
+                  <span className="text-sm text-gray-600">⭐ {selectedSource.rating}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">가격</span>
+                  <div className="text-right">
+                    {selectedSource.actualPrice !== selectedSource.price && (
+                      <div className="text-sm text-gray-500 line-through">
+                        {selectedSource.price?.toLocaleString()}원
+                      </div>
+                    )}
+                    <div className="font-bold text-green-600">
+                      {selectedSource.actualPrice?.toLocaleString() || selectedSource.price?.toLocaleString()}원
+                    </div>
+                    {selectedSource.discount && selectedSource.discount > 0 && (
+                      <div className="text-xs text-green-600">
+                        {selectedSource.discount}원 절약
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 버튼들 */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowPurchaseModal(false)}
+                  className="flex-1 py-3 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition-colors"
+                >
+                  아니요
+                </button>
+                <button
+                  onClick={handlePurchaseConfirm}
+                  className="flex-1 py-3 px-4 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition-colors"
+                >
+                  네, 사용했어요.
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -358,9 +491,10 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* 자동 회전 추천 카드 */}
-        <div className="px-4 mb-6">
-          <div className="text-sm font-medium text-gray-600 mb-3 px-2">추천 검색</div>
+        {/* 자동 회전 추천 카드 - 기본 상태에서는 숨김 */}
+        {!showCardSlider && (
+          <div className="px-4 mb-6">
+            <div className="text-sm font-medium text-gray-600 mb-3 px-2">추천 검색</div>
           <div className="overflow-hidden">
             <div 
               className="flex transition-transform duration-500 ease-in-out"
@@ -408,6 +542,75 @@ export default function HomePage() {
             ))}
           </div>
         </div>
+        )}
+
+        {/* 구매 후 카드 슬라이더 - 하단 검색창 위에 표시 */}
+        {showCardSlider && (
+          <div className="fixed bottom-20 left-4 right-4 md:absolute md:bottom-20 md:left-4 md:right-4 z-40">
+            <div className="max-w-sm md:max-w-md lg:max-w-lg mx-auto">
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4 mb-4">
+                <div className="text-sm font-medium text-gray-600 mb-3 text-center">다른 상품도 검색해보세요</div>
+                <div className="overflow-hidden">
+                  <div 
+                    className="flex transition-transform duration-500 ease-in-out"
+                    style={{ transform: `translateX(-${currentCardIndex * 50}%)` }}
+                  >
+                    {SUGGESTION_CARDS.map((card, index) => (
+                      <div 
+                        key={index}
+                        className="w-1/2 flex-shrink-0 px-2"
+                      >
+                        <div 
+                          className="bg-gray-50 border border-gray-100 rounded-xl p-3 hover:shadow-sm transition-all cursor-pointer h-full"
+                          onClick={() => {
+                            setShowCardSlider(false)
+                            handleSearch(card.text, card.category)
+                          }}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="text-xl flex-shrink-0">{card.icon}</div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-900 mb-1">
+                                {card.text}
+                              </div>
+                              <div className="text-xs text-gray-600">{card.description}</div>
+                            </div>
+                            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* 인디케이터 */}
+                <div className="flex justify-center mt-3 gap-1">
+                  {Array.from({ length: Math.ceil(SUGGESTION_CARDS.length / 2) }).map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentCardIndex(index * 2)}
+                      className={`w-2 h-2 rounded-full transition-colors ${
+                        Math.floor(currentCardIndex / 2) === index ? 'bg-gray-800' : 'bg-gray-300'
+                      }`}
+                    />
+                  ))}
+                </div>
+                
+                {/* 닫기 버튼 */}
+                <button
+                  onClick={() => setShowCardSlider(false)}
+                  className="absolute top-2 right-2 w-6 h-6 bg-gray-200 hover:bg-gray-300 rounded-full flex items-center justify-center transition-colors"
+                >
+                  <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 하단 검색창 */}
         <div className="fixed bottom-4 left-4 right-4 md:absolute md:bottom-4 md:left-4 md:right-4">
@@ -441,6 +644,93 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* 구매 확인 모달 */}
+      {showPurchaseModal && selectedSource && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4" 
+          style={{zIndex: 9999}}
+        >
+          <div 
+            className="bg-white rounded-2xl p-6 w-full max-w-sm mx-auto shadow-xl" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 카드 리더기 UI */}
+            <div className="flex flex-col items-center mb-6">
+              <div className="relative mb-4">
+                {/* 카드 리더기 */}
+                <div className="w-24 h-16 bg-gray-300 rounded-lg flex items-center justify-center relative">
+                  <div className="w-16 h-10 bg-white rounded border-2 border-gray-400 flex items-center justify-center">
+                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  </div>
+                  {/* 카드 삽입 슬롯 */}
+                  <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-16 h-1 bg-gray-600 rounded"></div>
+                </div>
+                {/* 카드가 삽입되는 모습 */}
+                <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-14 h-8 bg-yellow-400 rounded-md"></div>
+              </div>
+              
+              <h3 className="text-lg font-semibold text-gray-900 mb-2 text-center">
+                카드를 사용하시나요?
+              </h3>
+              <p className="text-sm text-gray-600 text-center mb-1">
+                사용하신다면 버튼을 눌러주세요.
+              </p>
+              <p className="text-sm text-gray-600 text-center mb-1">
+                쿠폰 사용으로 절약한 금액이 반영
+              </p>
+              <p className="text-sm text-gray-600 text-center">
+                절약 캐시에 등록되어 올려갑니다.
+              </p>
+              <p className="text-xs text-gray-500 text-center mt-2">
+                총급 체크 : ???
+              </p>
+            </div>
+
+            {/* 구매 정보 */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <div className="flex justify-between items-start mb-2">
+                <span className="font-medium text-gray-900">{selectedSource.platform}</span>
+                <span className="text-sm text-gray-600">⭐ {selectedSource.rating}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">가격</span>
+                <div className="text-right">
+                  {selectedSource.actualPrice !== selectedSource.price && (
+                    <div className="text-sm text-gray-500 line-through">
+                      {selectedSource.price?.toLocaleString()}원
+                    </div>
+                  )}
+                  <div className="font-bold text-green-600">
+                    {selectedSource.actualPrice?.toLocaleString() || selectedSource.price?.toLocaleString()}원
+                  </div>
+                  {selectedSource.discount && selectedSource.discount > 0 && (
+                    <div className="text-xs text-green-600">
+                      {selectedSource.discount}원 절약
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* 버튼들 */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowPurchaseModal(false)}
+                className="flex-1 py-3 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition-colors"
+              >
+                아니요
+              </button>
+              <button
+                onClick={handlePurchaseConfirm}
+                className="flex-1 py-3 px-4 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition-colors"
+              >
+                네, 사용했어요.
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

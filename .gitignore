@@ -2,3 +2,12 @@ node_modules
 .cursor
 
 .env.local
+.next
+.env
+.env.development
+.env.production
+.env.test
+.env.test.local
+.env.test.local.backup
+.env.test.local.backup.2
+.env.test.local.backup.3

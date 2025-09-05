@@ -2,10 +2,29 @@
 
 import { useState } from 'react'
 
+interface PriceSource {
+  platform: string
+  price: number
+  url: string
+  availability: boolean
+  shipping: number
+  rating?: number
+}
+
+interface SearchResult {
+  productName: string
+  category: string
+  sources: PriceSource[]
+  averagePrice: number
+  lowestPrice: number
+  recommendedPlatform: string
+}
+
 export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearching, setIsSearching] = useState(false)
   const [showResults, setShowResults] = useState(false)
+  const [searchResult, setSearchResult] = useState<SearchResult | null>(null)
 
   const handleSearch = async (query?: string) => {
     const searchText = query || searchQuery
@@ -21,13 +40,14 @@ export default function HomePage() {
         },
         body: JSON.stringify({
           productName: searchText,
-          category: '카페'
+          category: '온라인쇼핑'
         }),
       })
       
       const result = await response.json()
       
-      if (result.success) {
+      if (result.success && result.data) {
+        setSearchResult(result.data)
         setShowResults(true)
       }
     } catch (error) {
@@ -47,10 +67,13 @@ export default function HomePage() {
     window.location.href = '/payment-methods'
   }
 
-  if (showResults) {
+  if (showResults && searchResult) {
+    const savings = searchResult.averagePrice - searchResult.lowestPrice
+    const savingsPercent = Math.round((savings / searchResult.averagePrice) * 100)
+
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-        <div className="w-full max-w-sm mx-auto bg-white min-h-screen md:min-h-0 md:rounded-3xl md:shadow-2xl md:max-h-[800px] overflow-hidden">
+        <div className="w-full max-w-sm mx-auto bg-white min-h-screen md:min-h-0 md:rounded-3xl md:shadow-2xl md:max-h-[800px] overflow-y-auto">
           {/* 헤더 */}
           <div className="flex items-center justify-between p-4 border-b bg-white">
             <button 
@@ -63,42 +86,77 @@ export default function HomePage() {
             </button>
             
             <div className="bg-black text-white px-4 py-2 rounded-full text-sm font-medium">
-              메가커피 검색 가
+              {searchResult.productName}
             </div>
           </div>
 
           {/* 검색 결과 설명 */}
           <div className="p-6 text-center">
             <p className="text-gray-600 text-sm mb-4 leading-relaxed">
-              현재 등록된 신용카드로 메가커피 아이스아메리카노를<br />
-              구매하면 1,000원을 절약할 수 있습니다.
+              {searchResult.productName}를 가장 저렴하게 구매할 수 있는<br />
+              쇼핑몰을 찾았습니다. 최대 {savings.toLocaleString()}원 절약 가능!
             </p>
             
             <h2 className="text-xl font-bold text-gray-900 mb-6">
-              내 소비에서 가장 저렴하게 구매하는 방법.
+              가장 저렴한 가격으로 구매하는 방법
             </h2>
           </div>
 
-          {/* 결제수단별 할인 정보 */}
-          <div className="px-4 space-y-4 mb-6">
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-              <div className="font-medium text-gray-900 mb-2">
-                홍길동님의 KB국민은행 0002카드 사용으로 1,000원 할인
+          {/* 최저가 쇼핑몰 */}
+          <div className="px-4 mb-4">
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-bold text-green-800">
+                  🏆 최저가: {searchResult.recommendedPlatform}
+                </div>
+                <div className="text-green-600 text-sm font-medium">
+                  {savingsPercent}% 저렴
+                </div>
               </div>
-              <div className="text-sm text-gray-600">• 온라인 결제 5% 추가 할인</div>
+              <div className="text-2xl font-bold text-green-900 mb-2">
+                {searchResult.lowestPrice.toLocaleString()}원
+              </div>
+              <div className="text-sm text-green-700">
+                평균 가격보다 {savings.toLocaleString()}원 저렴
+              </div>
             </div>
+          </div>
 
-            <div className="text-lg font-bold text-gray-900 mb-3 px-2">그외,</div>
+          {/* 다른 쇼핑몰 가격 비교 */}
+          <div className="px-4 space-y-3 mb-6">
+            <div className="text-lg font-bold text-gray-900 mb-3">다른 쇼핑몰 가격</div>
             
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-              <div className="font-medium text-gray-900 mb-2">네이버페이 500원 할인</div>
-              <div className="text-sm text-gray-600">• 간편결제 적립 혜택</div>
-            </div>
-
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-              <div className="font-medium text-gray-900 mb-2">카카오페이 300원 할인</div>
-              <div className="text-sm text-gray-600">• 첫 결제 보너스</div>
-            </div>
+            {searchResult.sources.slice(0, 5).map((source, index) => (
+              <div key={source.platform} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900 mb-1">
+                      {source.platform}
+                    </div>
+                    <div className="text-lg font-bold text-gray-900">
+                      {source.price.toLocaleString()}원
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <span>배송비: {source.shipping === 0 ? '무료' : `${source.shipping.toLocaleString()}원`}</span>
+                      {source.rating && (
+                        <span>⭐ {source.rating}</span>
+                      )}
+                      <span className={source.availability ? 'text-green-600' : 'text-red-600'}>
+                        {source.availability ? '재고있음' : '품절'}
+                      </span>
+                    </div>
+                  </div>
+                  <a 
+                    href={source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-gray-800 text-white px-3 py-1 rounded-lg text-sm hover:bg-gray-700 transition-colors"
+                  >
+                    구매
+                  </a>
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* 하단 검색창 */}
@@ -232,24 +290,24 @@ export default function HomePage() {
           <div className="grid grid-cols-2 gap-3 md:gap-4">
             <div 
               className="bg-white border border-gray-200 rounded-2xl p-4 md:p-6 text-center shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => handleCardClick("아이스 아메리카노 1,000원 저렴하게 마시는 방법")}
+              onClick={() => handleCardClick("아이폰 15")}
             >
-              <div className="text-2xl md:text-3xl mb-2">☕</div>
+              <div className="text-2xl md:text-3xl mb-2">📱</div>
               <div className="text-sm md:text-base font-medium text-gray-900 mb-1">
-                아이스 아메리카노 1,000원
+                아이폰 15
               </div>
-              <div className="text-xs md:text-sm text-gray-600">저렴하게 마시는 방법</div>
+              <div className="text-xs md:text-sm text-gray-600">최저가 검색</div>
             </div>
             
             <div 
               className="bg-white border border-gray-200 rounded-2xl p-4 md:p-6 text-center shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => handleCardClick("피자헛이선 올리브팬에서 10% 할인 받는 방법")}
+              onClick={() => handleCardClick("나이키 에어포스")}
             >
-              <div className="text-2xl md:text-3xl mb-2">🍕</div>
+              <div className="text-2xl md:text-3xl mb-2">👟</div>
               <div className="text-sm md:text-base font-medium text-gray-900 mb-1">
-                피자헛이선 올리브팬에서
+                나이키 에어포스
               </div>
-              <div className="text-xs md:text-sm text-gray-600">10% 할인 받는 방법</div>
+              <div className="text-xs md:text-sm text-gray-600">최저가 검색</div>
             </div>
           </div>
         </div>

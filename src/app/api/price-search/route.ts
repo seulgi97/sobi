@@ -51,15 +51,56 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // 브랜드명 감지 및 처리
+    const detectBrandSpecificQuery = (query: string) => {
+      const brandPatterns = [
+        // 카페 브랜드
+        { brands: ['스타벅스', '스벅'], category: '카페' },
+        { brands: ['메가커피', '메가'], category: '카페' },
+        { brands: ['컴포즈커피', '컴포즈'], category: '카페' },
+        { brands: ['탐앤탐스', '탐탐'], category: '카페' },
+        { brands: ['이디야', '이디야커피'], category: '카페' },
+        { brands: ['할리스', '할리스커피'], category: '카페' },
+        { brands: ['투썸플레이스', '투썸'], category: '카페' },
+        { brands: ['빽다방', '빽'], category: '카페' },
+        { brands: ['엔젤리너스', '엔젤'], category: '카페' },
+        { brands: ['폴바셋', '폴'], category: '카페' },
+        { brands: ['커피빈', '빈'], category: '카페' },
+        { brands: ['파스쿠찌'], category: '카페' },
+        // 편의점 브랜드
+        { brands: ['GS25', 'GS'], category: '편의점' },
+        { brands: ['세븐일레븐', '7일레븐', '세븐'], category: '편의점' },
+        { brands: ['CU', '씨유'], category: '편의점' },
+        { brands: ['이마트24'], category: '편의점' },
+        // 마트 브랜드
+        { brands: ['이마트'], category: '마트' },
+        { brands: ['롯데마트'], category: '마트' },
+        { brands: ['홈플러스'], category: '마트' },
+        { brands: ['코스트코'], category: '마트' }
+      ]
+
+      for (const pattern of brandPatterns) {
+        for (const brand of pattern.brands) {
+          if (query.includes(brand)) {
+            return { brand, category: pattern.category, isBrandSpecific: true }
+          }
+        }
+      }
+      return { isBrandSpecific: false }
+    }
+
+    const brandInfo = detectBrandSpecificQuery(productName)
+    
     // 온라인/오프라인 구분하여 프롬프트 생성
-    const isOffline = ['편의점', '마트', '백화점', '카페', '주유소', '병원', '약국', '미용실', '헬스장'].includes(category)
+    const isOffline = ['편의점', '마트', '백화점', '카페', '주유소', '병원', '약국', '미용실', '헬스장'].includes(category) || brandInfo.isBrandSpecific
     
     const prompt = isOffline ? `
-다음 상품/서비스에 대한 오프라인 매장 정보와 결제수단별 혜택을 정확한 JSON 형태로 제공해주세요.
+다음 상품/서비스에 대한 ${brandInfo.isBrandSpecific ? `${brandInfo.brand} 브랜드 중심의` : '오프라인'} 매장 정보와 결제수단별 혜택을 정확한 JSON 형태로 제공해주세요.
 
 상품/서비스 정보:
 - 상품명: "${productName}"
 - 카테고리: "${category}"
+${brandInfo.isBrandSpecific ? `- 중심 브랜드: "${brandInfo.brand}"` : ''}
 ${location ? `- 지역: ${location}` : ''}
 ${targetPrice ? `- 목표 가격: ${targetPrice.toLocaleString()}원` : ''}
 
@@ -68,6 +109,8 @@ ${targetPrice ? `- 목표 가격: ${targetPrice.toLocaleString()}원` : ''}
 2. 가격은 반드시 숫자 타입으로 설정하세요
 3. 결제수단별 혜택을 포함하세요
 4. 실제 매장 체인명을 사용하세요
+${brandInfo.isBrandSpecific ? `5. ${brandInfo.brand}를 포함하여 같은 카테고리의 경쟁 브랜드들과 비교하세요
+6. 특정 브랜드에서 해당 상품을 가장 싸게 사는 방법을 중점적으로 제공하세요` : ''}
 
 JSON 형태:
 {
@@ -75,7 +118,7 @@ JSON 형태:
   "category": "${category}",
   "sources": [
     {
-      "platform": "매장명 (예: GS25, 세븐일레븐, 롯데마트, 스타벅스 등)",
+      "platform": "매장명 (예: ${brandInfo.isBrandSpecific ? brandInfo.brand + ', ' : ''}GS25, 세븐일레븐, 롯데마트, 스타벅스 등)",
       "price": 숫자,
       "url": "매장 홈페이지 또는 앱 링크",
       "availability": true,
@@ -91,9 +134,11 @@ JSON 형태:
   "recommendedPlatform": "최저가매장명"
 }
 
-포함할 매장: ${category}에 맞는 실제 브랜드 매장들
-${category === '카페' ? `
-카페 브랜드: 스타벅스, 이디야, 메가커피, 컴포즈커피, 탐앤탐스, 할리스, 투썸플레이스, 커피빈, 엔젤리너스, 빽다방, 폴바셋, 파스쿠찌, 카페베네, 커피나무, 그라찌에, 드롭탑, 더벤티, 매머드커피, 커피에반하다, 니코스케이터
+포함할 매장: ${brandInfo.isBrandSpecific ? `${brandInfo.brand}를 포함한 ` : ''}${category}에 맞는 실제 브랜드 매장들
+${category === '카페' || brandInfo.category === '카페' ? `
+카페 브랜드: ${brandInfo.isBrandSpecific ? `${brandInfo.brand} (우선포함), ` : ''}스타벅스, 이디야, 메가커피, 컴포즈커피, 탐앤탐스, 할리스, 투썸플레이스, 커피빈, 엔젤리너스, 빽다방, 폴바셋, 파스쿠찌, 카페베네, 커피나무, 그라찌에, 드롭탑, 더벤티, 매머드커피, 커피에반하다, 니코스케이터
+${brandInfo.isBrandSpecific ? `- ${brandInfo.brand}의 실제 메뉴 가격을 기준으로 하되, 다른 브랜드들과 비교하여 표시하세요
+- ${brandInfo.brand}에서 해당 음료를 가장 저렴하게 구매할 수 있는 결제수단과 할인 방법을 제공하세요` : ''}
 ` : ''}
 - 결제수단별 할인혜택 포함 (신용카드, 간편결제, 멤버십 등)
 - ${category} 카테고리에 적합한 합리적인 가격 범위 사용
